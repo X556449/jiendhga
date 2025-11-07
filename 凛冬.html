@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+    <title>爱心逐条弹窗（优化版）</title>
+    <style>
+        :root{ 
+            --glow-r1:10px; 
+            --glow-r2:22px; 
+            --primary-pink: #ff758c;
+            --primary-light: #ffc4d6;
+            --dark-bg: #121212;
+            --dark-card: #1e1e1e;
+        }
+        html,body{
+            height:100%;margin:0;overflow:hidden;
+            font-family:"微软雅黑",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+            background:#f8f9fa; /* 更柔和的页面背景 */
+        }
+
+        /* 1. 初始确认弹窗（优化质感） */
+        .confirm-popup{
+            position:fixed;top:0;left:0;width:100%;height:100%;
+            background:rgba(0,0,0,0.4); /* 降低遮罩透明度，更通透 */
+            backdrop-filter:blur(8px); /* 增强模糊，提升高级感 */
+            display:flex;align-items:center;justify-content:center;
+            z-index:10000;
+            transition:all 0.5s ease;
+        }
+        .confirm-content{
+            width:90%;max-width:520px;padding:35px 25px;
+            border-radius:24px; /* 更大圆角，更柔和 */
+            background:#fff;
+            text-align:center;
+            box-shadow:0 12px 35px rgba(0,0,0,0.12); /* 更自然的阴影 */
+            transform:scale(0.95);
+            transition:transform 0.3s ease;
+        }
+        .confirm-popup.show .confirm-content{
+            transform:scale(1); /* 弹窗显示动画 */
+        }
+        .confirm-title{
+            font-size:24px;font-weight:800;color:var(--primary-pink);
+            margin-bottom:22px;
+            text-shadow:0 2px 10px rgba(255,117,140,.15);
+            letter-spacing:0.05em;
+        }
+        .confirm-desc{
+            font-size:15px;color:#666;
+            margin-bottom:30px;
+            line-height:1.6;
+        }
+        .confirm-btn{
+            padding:14px 32px;border:none;border-radius:16px;
+            background:linear-gradient(135deg,var(--primary-pink),#ff7eb3);
+            color:#fff;font-size:16px;font-weight:600;cursor:pointer;
+            box-shadow:0 6px 20px rgba(255,117,140,.35); /* 渐变阴影，更立体 */
+            transition:all 0.3s ease;
+            letter-spacing:0.03em;
+        }
+        .confirm-btn:hover{
+            transform:translateY(-2px);
+            box-shadow:0 8px 25px rgba(255,117,140,.45);
+        }
+
+        /* 2. 主内容弹窗（优化布局与质感） */
+        .main-popup{
+            position:fixed;top:0;left:0;width:100%;height:100%;
+            background:rgba(0,0,0,0.3);
+            backdrop-filter:blur(8px);
+            display:flex;align-items:center;justify-content:center;
+            z-index:9999;opacity:0;pointer-events:none;
+            transition:opacity 0.5s ease;
+        }
+        .main-popup.show{opacity:1;pointer-events:all;}
+        .main-content{
+            width:92%;max-width:620px;height:80vh;max-height:600px;
+            border-radius:28px; /* 超大圆角，弱化生硬感 */
+            overflow:hidden;
+            position:relative;
+            box-shadow:0 15px 40px rgba(0,0,0,0.15);
+            background:#fff;
+            transform:translateY(20px);
+            transition:transform 0.4s ease;
+        }
+        .main-popup.show .main-content{
+            transform:translateY(0); /* 主弹窗滑入动画 */
+        }
+
+        /* 主弹窗标题栏（优化配色） */
+        .main-header{
+            height:65px;display:flex;align-items:center;padding:0 25px;
+            background:linear-gradient(135deg,var(--primary-pink),#ff7eb3);
+            color:#fff;font-size:19px;font-weight:600;
+            letter-spacing:0.03em;
+            box-shadow:0 2px 10px rgba(255,117,140,.2); /* 标题栏轻微阴影 */
+        }
+        .close-btn{
+            margin-left:auto;width:40px;height:40px;border-radius:50%;
+            background:rgba(255,255,255,0.25); /* 更通透的关闭按钮背景 */
+            border:none;color:#fff;
+            cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;
+            transition:background 0.3s ease;
+        }
+        .close-btn:hover{
+            background:rgba(255,255,255,0.4);
+        }
+
+        /* 3. 文本显示舞台（优化背景过渡） */
+        .stage{
+            width:100%;height:calc(100% - 120px); /* 适配新高度 */
+            position:relative;overflow:hidden;
+            background:
+                radial-gradient(1200px 600px at 50% 45%, rgba(255,255,255,.7), rgba(255,255,255,0) 65%),
+                radial-gradient(circle at 50% 45%, #fff9fc 0%, #f0f9ff 100%); /* 更柔和的浅色背景 */
+            transition:background 1.2s ease; /* 缓慢过渡，更自然 */
+            padding:20px;
+        }
+        .stage.dark{
+            background:
+                radial-gradient(1200px 600px at 50% 45%, rgba(30,30,30,.85), rgba(0,0,0,0) 65%),
+                radial-gradient(circle at 50% 45%, var(--dark-card) 0%, var(--dark-bg) 100%);
+        }
+        .stage.dark.eco{ --glow-r1:6px; --glow-r2:14px; }
+
+        /* 文本块样式（优化光影） */
+        .msg{
+            position:absolute;left:50%;top:50%;
+            padding:14px 22px;border-radius:20px; /* 文本块圆角同步增大 */
+            color:#fff;font-weight:700;
+            font-size:clamp(15px,3.2vmin,24px);
+            text-shadow:0 3px 10px rgba(0,0,0,.3);
+            opacity:0;transform:translate(-50%,-50%) scale(0.9);
+            transition:all 0.8s cubic-bezier(.25,.7,.3,1); /* 更慢的过渡，更优雅 */
+            box-shadow:0 10px 30px rgba(0,0,0,.25);
+            background:var(--bg);
+            max-width:85%;text-align:center;
+            z-index:10;
+        }
+        .msg.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+        /* 心形伪元素（优化大小比例） */
+        .msg::before,.msg::after{
+            content:'';position:absolute;left:50%;top:0;
+            background:inherit;
+            border-radius:50px 50px 0 0;
+            width:24px;height:36px; /* 微调心形大小 */
+            opacity:0;
+            transition:opacity .4s ease;
+            transform-origin:0 100%;transform:rotate(-45deg);z-index:0;
+        }
+        .msg::after{left:0;transform-origin:100% 100%;transform:rotate(45deg);}
+        .msg.heart-mode::before,.msg.heart-mode::after{opacity:1;}
+        .msg .text{position:relative;z-index:1;line-height:1.6;}
+
+        /* 暗黑模式文本样式（优化辉光） */
+        .stage.dark .msg{
+            box-shadow:none;
+            filter:drop-shadow(0 0 var(--glow-r1) var(--glow1))
+                    drop-shadow(0 0 var(--glow-r2) var(--glow2));
+        }
+
+        /* 中心标题（优化显示时机） */
+        .center-title{
+            position:absolute;left:50%;top:35%;transform:translate(-50%,-50%);
+            font-weight:800;letter-spacing:.12em;
+            font-size:clamp(19px,4.2vmin,30px);
+            color:rgba(255,105,180,.8);
+            text-shadow:0 3px 12px rgba(255,105,180,.2);
+            opacity:0;pointer-events:none;transition:opacity 1s ease 0.3s; /* 延迟显示 */
+        }
+        .stage.dark .center-title{
+            color:rgba(255,160,200,.95);
+            text-shadow:0 0 20px rgba(255,130,200,.4);
+        }
+        .stage.show-title .center-title{opacity:0.95;}
+
+        /* 4. 控制区（优化布局与样式） */
+        .control-area{
+            position:absolute;bottom:25px;left:0;right:0;
+            display:flex;justify-content:center;align-items:center;
+            gap:12px;z-index:20;
+            padding:0 20px;
+        }
+        .countdown{
+            color:#555;font-size:14px;font-weight:600;
+            background:rgba(255,255,255,0.85);
+            backdrop-filter:blur(10px);
+            padding:11px 16px;border-radius:14px;
+            box-shadow:0 4px 15px rgba(0,0,0,.1);
+            min-width:120px;text-align:center;
+        }
+        .stage.dark .countdown{
+            color:#eee;background:rgba(40,40,40,0.6);
+            box-shadow:0 4px 15px rgba(0,0,0,.3);
+        }
+        .control-btn{
+            padding:11px 22px;border:none;border-radius:14px;
+            background:rgba(255,255,255,0.85);
+            backdrop-filter:blur(10px);
+            color:#222;font-size:14px;font-weight:600;cursor:pointer;
+            box-shadow:0 4px 15px rgba(0,0,0,.1);
+            transition:all 0.3s ease;
+            letter-spacing:0.02em;
+        }
+        .control-btn:hover{
+            transform:translateY(-2px);
+            box-shadow:0 6px 20px rgba(0,0,0,.15);
+        }
+        .control-btn:disabled{
+            opacity:0.5;cursor:not-allowed;transform:translateY(0);
+            box-shadow:0 4px 15px rgba(0,0,0,.08);
+        }
+        .stage.dark .control-btn{
+            background:rgba(40,40,40,0.6);color:#fff;
+            box-shadow:0 4px 15px rgba(0,0,0,.3);
+        }
+        /* 突出“下一条”按钮，引导操作 */
+        #nextBtn{
+            background:linear-gradient(135deg,var(--primary-pink),#ff7eb3);
+            color:#fff;
+            box-shadow:0 4px 15px rgba(255,117,140,.3);
+        }
+        #nextBtn:hover{
+            box-shadow:0 6px 20px rgba(255,117,140,.45);
+        }
+        .stage.dark #nextBtn{
+            box-shadow:0 4px 15px rgba(255,117,140,.4);
+        }
+
+        /* 5. 雪花样式（优化密度） */
+        .snow{
+            position:fixed;top:-10px;color:white;
+            user-select:none;pointer-events:none;
+            z-index:5;text-shadow:0 0 10px rgba(255,255,255,.9);
+            animation:snowfall linear forwards;
+        }
+        @keyframes snowfall{0%{transform:translateY(0) rotate(0deg);opacity:1;}100%{transform:translateY(100vh) rotate(360deg);opacity:0;}}
+
+        /* 6. 音乐隐藏 */
+        #bgMusic { display: none; }
+    </style>
+</head>
+<body>
+    <!-- 1. 初始确认弹窗（新增描述文本） -->
+    <div class="confirm-popup" id="confirmPopup">
+        <div class="confirm-content">
+            <div class="confirm-title">发现一份专属思念</div>
+            <div class="confirm-desc">100条心情短句，5秒自动切换，也可手动控制<br>点击“确认打开”，开启这份回忆</div>
+            <button class="confirm-btn" id="confirmBtn">确认打开</button>
+        </div>
+    </div>
+
+    <!-- 2. 主内容弹窗 -->
+    <div class="main-popup" id="mainPopup">
+        <div class="main-content">
+            <div class="main-header">
+                思念爱心 · 100条逐条查看
+                <button class="close-btn" id="closeBtn">&times;</button>
+            </div>
+            <div class="stage" id="stage">
+                <div class="center-title" id="centerTitle">for you ♥</div>
+                <!-- 控制区（优化布局） -->
+                <div class="control-area">
+                    <div class="countdown" id="countdown">5秒后自动下一条</div>
+                    <button class="control-btn" id="prevBtn" disabled>上一条</button>
+                    <button class="control-btn" id="nextBtn">下一条</button>
+                    <button class="control-btn" id="modeBtn">切换明暗</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 背景音乐 -->
+    <audio id="bgMusic" loop>
+        <source src="https://lf26-music-east.douyinstatic.com/obj/ies-music-hj/7544329832742570811.mp3" type="audio/mpeg">
+     ></audio>
+
+<script>
+// 1. 100条思念短句（完整保留）
+const tips=[
+    '1. 连个能发“想你”的对话框，都没留在手机里。',
+    '2. 曾聊过的话题，现在只能在心里反复重播。',
+    '3. 连你的头像，都随着聊天记录一起消失了。',
+    '4. 想找你分享日常，才发现早没了联系的入口。',
+    '5. 记得你说过的话，却没地方再和你提起。',
+    '6. 连你喜欢的东西，都只能自己默默记着。',
+    '7. 曾一起笑过的事，现在只剩我一个人回忆。',
+    '8. 想告诉你我很好，却不知道你在哪里。',
+    '9. 连你的昵称，都快记不清具体的写法了。',
+    '10. 路过你提过的地方，却没法告诉你我来了。',
+    '11. 听到你喜欢的歌，只能自己单曲循环。',
+    '12. 曾约定要聊的事，现在成了没完成的遗憾。',
+    '13. 想和你吐槽烦恼，却找不到人说出口。',
+    '14. 连你发过的表情包，都没机会再看到了。',
+    '15. 看到有趣的事，第一反应是想你，却没法分享。',
+    '16. 曾一起追的剧，更新了也没人和我讨论。',
+    '17. 想知道你最近怎样，却没有任何渠道打听。',
+    '18. 连你推荐的书，看完了也没人交流感受。',
+    '19. 吃到你说过的美食，却没人和我一起称赞。',
+    '20. 曾聊到深夜的时光，现在成了珍贵的回忆。',
+    '21. 想告诉你我想你，却连个地址都没有。',
+    '22. 连你的声音，都快在记忆里模糊了。',
+    '23. 看到和你相似的人，总会忍不住多看几眼。',
+    '24. 曾一起玩的游戏，现在只剩我一个人上线。',
+    '25. 想和你分享风景，却没机会让你看见。',
+    '26. 连你喜欢的口味，都只能自己点来尝尝。',
+    '27. 想起你说过的梦想，却不知道你有没有实现。',
+    '28. 曾互相鼓励的话，现在成了安慰自己的动力。',
+    '29. 想找你聊新话题，却没了联系的可能。',
+    '30. 连你存在过的痕迹，都在慢慢变淡。',
+    '31. 听到别人聊起你喜欢的事，会下意识停下脚步。',
+    '32. 曾一起打卡的事，现在只能自己完成。',
+    '33. 想知道你有没有想起我，却无从知晓。',
+    '34. 连你发过的照片，都只能在脑海里回忆。',
+    '35. 看到你喜欢的花，却没法告诉你它开了。',
+    '36. 曾一起吐槽的事，现在只能自己默默吐槽。',
+    '37. 想和你说声再见，却没机会说出口。',
+    '38. 连你的生日，都不知道该怎么默默祝福。',
+    '39. 吃到你推荐的零食，却没人和我一起分享。',
+    '40. 曾聊过的未来，现在只剩我自己往前走。',
+    '41. 想告诉你我记得你，却没地方传递这份心意。',
+    '42. 连你喜欢的天气，来了也没人一起感受。',
+    '43. 看到和你相似的昵称，会忍不住点进去看。',
+    '44. 曾一起听的歌单，现在只剩我一个人听。',
+    '45. 想和你分享心情，却没了倾诉的对象。',
+    '46. 连你说过的小事，都还清晰地记在心里。',
+    '47. 路过你喜欢的店，却没法和你一起进去。',
+    '48. 曾互相分享的照片，现在只能存在相册深处。',
+    '49. 想知道你过得好不好，却只能默默牵挂。',
+    '50. 就算没了联系方式，想起你的时候，还是会温柔一笑。',
+    '1. 曾彻夜长聊的对话框，现在只剩聊天记录里的“已读”再也不会更新。',
+    '2. 刷到你曾分享过的短视频，手指顿在点赞键，才想起早没了你的关注。',
+    '3. 想在共同群聊@你，却发现你早退出了群，头像也变成了灰色。',
+    '4. 打开曾一起玩的联机游戏，好友列表里你的头像再也没亮过。',
+    '5. 看到你喜欢的博主更新，想转发给你，却找不到分享的聊天窗口。',
+    '6. 翻遍社交平台关注列表，连你换过的昵称都记得，却搜不到你的账号。',
+    '7. 曾约定线上一起跨年，现在新年钟声响起，只剩我对着屏幕发呆。',
+    '8. 看到你曾推荐的线上演唱会，买票时才想起，没人和我一起连麦看。',
+    '9. 想和你说“我学会了P图”，却没机会把修好的合照发给你。',
+    '10. 刷到和你同城的定位，总觉得我们离得很近，却没勇气去偶遇。',
+    '11. 曾一起吐槽的线上课程，现在我还在学，却没人和我互相吐槽作业。',
+    '12. 打开云文档，看到我们曾一起写的待办清单，很多项都没来得及完成。',
+    '13. 想分享新发现的宝藏歌单，点开分享界面，才想起你的音乐账号早没了关联。',
+    '14. 看到你曾喜欢的虚拟主播直播，想告诉你“他今天直播了”，却没了消息渠道。',
+    '15. 曾一起线上拼单买东西，现在看到同款，才想起没人和我凑满减。',
+    '16. 刷到你曾发过的旅行打卡动态，想评论“我也去过这里”，却发现动态已被删除。',
+    '17. 想和你说“我终于学会了剪辑视频”，却没人会第一个点赞我的作品。',
+    '18. 打开线上桌游房间，房间号还记着，却再也等不到你加入。',
+    '19. 看到你曾吐槽的网络梗，想发给你一起笑，却没了能发的对话框。',
+    '20. 曾约定线上一起学外语，现在我还在背单词，却没人和我互相抽查。',
+    '21. 刷到你曾关注的宠物博主，想告诉你“它生小猫了”，却搜不到你的账号。',
+    '22. 打开线上书店，看到你曾推荐的书，下单时才想起，没人和我交换读后感。',
+    '23. 想和你连麦看恐怖片，却发现再也没法拨通那个熟悉的语音通话键。',
+    '24. 看到你曾分享的线上测试链接，做完测试想和你比结果，却没了分享的人。',
+    '25. 曾一起在社交平台互动点赞，现在我点赞的动态，再也等不到你的回应。',
+    '26. 刷到和你头像相似的账号，点进去看资料，却发现不是你。',
+    '27. 想告诉你“我换了新的社交头像”，却不知道你会不会觉得好看。',
+    '28. 打开曾一起用的在线笔记，里面记满了我们的聊天碎片，却再也没人更新。',
+    '29. 看到线上活动的邀请，想起我们曾一起报名，现在只剩我一个人犹豫要不要参加。',
+    '30. 想和你说“今天网络好卡”，却没人会回“我这边也是，好烦”。',
+    '31. 曾一起线上追星，现在看到偶像的新动态，想分享却没了同好。',
+    '32. 刷到你曾发过的美食图片，想评论“看起来好好吃”，却发现账号已注销。',
+    '33. 想和你线上一起拼乐高，下单时才想起，没人会和我视频分享搭建进度。',
+    '34. 看到你曾推荐的线上讲座，听完想和你讨论，却没了能聊的人。',
+    '35. 曾一起在深夜连麦听白噪音，现在我还在听，却没人和我一起说“晚安”。',
+    '36. 刷到你曾喜欢的穿搭博主，想告诉你“她今天的搭配好好看”，却没了消息渠道。',
+    '37. 想和你说“我终于拿到线上课程证书了”，却没人会说“恭喜你，好厉害”。',
+    '38. 打开线上K歌软件，看到我们曾合唱的歌，点进去听，却只剩我的声音。',
+    '39. 看到你曾分享的手工教程，学会后想拍给你看，却没了能发的人。',
+    '40. 曾一起线上规划旅行路线，现在路线还在，却没人和我一起出发。',
+    '41. 刷到和你IP属地相同的动态，总忍不住点进去，希望能看到你的痕迹。',
+    '42. 想和你说“今天看到一个和你很像的网友”，却没了能聊的对话框。',
+    '43. 打开曾一起用的在线相册，里面存满了我们的截图，却再也没人添加新照片。',
+    '44. 看到线上抽奖活动，想起我们曾一起转发，现在中奖了也没人一起开心。',
+    '45. 想告诉你“我学会了做你说过的甜品”，却没机会让你隔着屏幕“云品尝”。',
+    '46. 曾一起线上吐槽快递慢，现在收到快递，想分享却没了人回应。',
+    '47. 刷到你曾喜欢的动漫周边，想发给你看，却发现早已没了你的联系方式。',
+    '48. 想和你连麦打游戏，却发现你的游戏账号早已注销。',
+    '49. 看到线上读书会的邀请，想起我们曾一起参加，现在只剩我一个人报名。',
+    '50. 就算隔着屏幕再也见不到，想起曾和你在线上分享的点滴，还是会觉得温暖。'
+];
+
+// 2. DOM元素获取
+const confirmPopup = document.getElementById('confirmPopup');
+const confirmBtn = document.getElementById('confirmBtn');
+const mainPopup = document.getElementById('mainPopup');
+const closeBtn = document.getElementById('closeBtn');
+const stage = document.getElementById('stage');
+const centerTitle = document.getElementById('centerTitle');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const modeBtn = document.getElementById('modeBtn');
+const countdown = document.getElementById('countdown');
+const bgMusic = document.getElementById('bgMusic');
+
+// 3. 状态变量（新增倒计时定时器）
+let currentIndex = 0;
+let dark = false;
+let eco = false;
+let snowRunning = false;
+let snowFrame;
+let lastSnowTime = 0;
+let snowIntervalMs = 700;
+let snowMax = 120;
+let countdownTimer = null; // 倒计时定时器
+const AUTO_NEXT_DELAY = 5000; // 5秒自动跳转
+
+// 4. 工具函数
+function rand(min,max){return Math.random()*(max-min)+min;}
+function hexToRgba(hex,alpha=1){
+    const h=hex.replace('#','');
+    const short=h.length===3;
+    const r=parseInt(short? h[0]+h[0] : h.slice(0,2),16);
+    const g=parseInt(short? h[1]+h[1] : h.slice(2,4),16);
+    const b=parseInt(short? h[2]+h[2] : h.slice(4,6),16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+function randomStyle(){
+    const arr=[
+        ['#ff758c','#ff7eb3'], ['#a18cd1','#fbc2eb'],
+        ['#f6d365','#fda085'], ['#84fab0','#8fd3f4'],
+        ['#f093fb','#f5576c'], ['#4facfe','#00f2fe'],
+        ['#43e97b','#38f9d7'], ['#fa709a','#fee140'],
+        ['#30cfd0','#330867'], ['#5ee7df','#b490ca']
+    ];
+    const [c1,c2]=arr[Math.floor(Math.random()*arr.length)];
+    return {
+        bg:`linear-gradient(135deg,${c1},${c2})`,
+        glow1:hexToRgba(c1,0.55),
+        glow2:hexToRgba(c2,0.35)
+    };
+}
+
+// 5. 核心：渲染当前短句+启动倒计时
+function renderCurrentText(){
+    // 清除现有定时器
+    if(countdownTimer) clearInterval(countdownTimer);
+    
+    // 移除旧文本
+    const oldMsg = document.querySelector('.msg');
+    if(oldMsg) oldMsg.remove();
+    
+    // 创建新文本
+    const sty = randomStyle();
+    const msg = document.createElement('div');
+    msg.className = 'msg heart-mode';
+    msg.style.setProperty('--bg', sty.bg);
+    msg.style.setProperty('--glow1', sty.glow1);
+    msg.style.setProperty('--glow2', sty.glow2);
+    msg.innerHTML = `<span class="text">${tips[currentIndex]}</span>`;
+    stage.appendChild(msg);
+    
+    // 显示动画
+    setTimeout(()=>{
+        msg.classList.add('show');
+        stage.classList.add('show-title');
+    }, 100);
+    
+    // 更新按钮状态
+    prevBtn.disabled = currentIndex === 0;
+    const isLast = currentIndex === tips.length - 1;
+    nextBtn.disabled = isLast;
+    nextBtn.textContent = isLast ? '已看完100条' : '下一条';
+    
+    // 启动倒计时（最后一条不启动）
+    if(!isLast){
+        let remaining = AUTO_NEXT_DELAY / 1000;
+        countdown.textContent = `${remaining}秒后自动下一条`;
+        countdownTimer = setInterval(()=>{
+            remaining--;
+            countdown.textContent = `${remaining}秒后自动下一条`;
+            if(remaining <= 0){
+                clearInterval(countdownTimer);
+                nextBtn.click(); // 自动触发下一条
+            }
+        }, 1000);
+    }else{
+        countdown.textContent = '已看完所有短句';
+    }
+}
+
+// 6. 雪花逻辑
+function createSnow(){
+    const snow=document.createElement('div');
+    snow.className='snow';
+    snow.textContent='❄';
+    snow.style.left=(Math.random()*100)+'%';
+    snow.style.fontSize=(Math.random()*12+8)+'px';
+    snow.style.opacity=(Math.random()*0.8+0.2);
+    const duration=(Math.random()*5+6);
+    snow.style.animationDuration=duration+'s';
+    stage.appendChild(snow);
+    setTimeout(()=>snow.remove(),duration*1000);
+}
+function loopSnow(ts){
+    if(!lastSnowTime) lastSnowTime=ts;
+    const delta=ts-lastSnowTime;
+    if(delta>snowIntervalMs && snowRunning && dark){
+        const count = stage.querySelectorAll('.snow').length;
+        if(count < snowMax) createSnow();
+        lastSnowTime=ts;
+    }
+    snowFrame=requestAnimationFrame(loopSnow);
+}
+function startSnow(){ snowRunning=true;lastSnowTime=0; loopSnow(); }
+function stopSnow(){ 
+    snowRunning=false; 
+    cancelAnimationFrame(snowFrame); 
+    stage.querySelectorAll('.snow').forEach(s=>s.remove()); 
+}
+
+// 7. 明暗模式切换
+function decideEco(){
+    const cores = navigator.hardwareConcurrency || 4;
+    const mem = navigator.deviceMemory || 4;
+    const area = stage.offsetWidth * stage.offsetHeight;
+    return (cores <= 4) || (mem <= 4) || (area >= 2400*1440);
+}
+function toggleMode(){
+    dark = !dark;
+    stage.classList.toggle('dark', dark);
+    if(dark){
+        eco = decideEco();
+        stage.classList.toggle('eco', eco);
+        snowIntervalMs = eco ? 800 : 500;
+        snowMax = eco ? 100 : 180;
+        startSnow();
+    }else{
+        stopSnow();
+        stage.classList.remove('eco');
+    }
+}
+
+// 8. 按钮事件
+// 初始确认弹窗
+confirmBtn.addEventListener('click', ()=>{
+    confirmPopup.classList.add('show');
+    setTimeout(()=>{
+        confirmPopup.style.opacity = 0;
+        confirmPopup.style.pointerEvents = 'none';
+        setTimeout(()=>{
+            confirmPopup.style.display = 'none';
+            mainPopup.classList.add('show');
+            renderCurrentText();
+            playMusic();
+        }, 500);
+    }, 300);
+});
+
+// 上一条/下一条
+prevBtn.addEventListener('click', ()=>{
+    if(currentIndex > 0){
+        currentIndex--;
+        renderCurrentText();
+    }
+});
+nextBtn.addEventListener('click', ()=>{
+    if(currentIndex < tips.length - 1){
+        currentIndex++;
+        renderCurrentText();
+    }
+});
+
+// 切换明暗
+modeBtn.addEventListener('click', toggleMode);
+
+// 关闭主弹窗
+closeBtn.addEventListener('click', ()=>{
+    if(countdownTimer) clearInterval(countdownTimer);
+    mainPopup.classList.remove('show');
+    stopSnow();
+    bgMusic.pause();
+    currentIndex = 0;
+    stage.classList.remove('show-title');
+});
+
+// 9. 音乐播放
+function playMusic() {
+    bgMusic.currentTime = 0;
+    bgMusic.play().catch(()=>{
+        mainPopup.addEventListener('click', ()=>bgMusic.play(), {once:true});
+    });
+}
+
+// 10. 窗口适配
+let resizeTimer;
+window.addEventListener('resize', ()=>{
+    if(mainPopup.classList.contains('show')){
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(()=> renderCurrentText(), 150);
+    }
+});
+
+// 初始显示确认弹窗
+window.addEventListener('load', ()=>{
+    confirmPopup.style.opacity = 1;
+});
+</script>
+</body>
+</html>
